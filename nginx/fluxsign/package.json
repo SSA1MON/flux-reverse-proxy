@@ -1,0 +1,14 @@
+{
+  "name": "flux-message-signer",
+  "version": "1.0.0",
+  "description": "Flux message signer with zeltrezjs and bitcoinjs-message",
+  "main": "sign_message.js",
+  "scripts": {
+    "start": "node sign_message.js"
+  },
+  "dependencies": {
+    "bitcoinjs-message": "^2.0.0",
+    "dotenv": "^16.3.1",
+    "zeltrezjs": "^1.1.0"
+  }
+}
