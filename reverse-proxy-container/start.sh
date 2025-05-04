@@ -148,14 +148,10 @@ write_config() {
     echo "📄 Writing to 3proxy.cfg with user $PROXY_USER..."
 
     cat <<EOF > /app/3proxy.cfg
-log /var/log/3proxy/3proxy.log D
-rotate 30
-
-users $PROXY_USER:CL:$PROXY_PASS
-
 auth strong
-allow $PROXY_USER
+users $PROXY_USER:CL:$PROXY_PASS
 socks -p1080
+allow $PROXY_USER
 EOF
 }
 
