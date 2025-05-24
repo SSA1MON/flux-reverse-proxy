@@ -47,8 +47,8 @@ def add_ip_to_project(container_ip, project_name, port):
     
     # Если проект - "other", не добавляем IP
     if project_name.lower() == "other":
-        logging.info(f"Проект определен как 'other', IP {container_ip} не был добавлен, так как он в исключениях.")
-        return "Проект определен как 'other', IP не был добавлен, так как он в исключениях."
+        logging.info(f"Проект определен как 'other', IP {container_ip} не был добавлен, так как проект в исключениях.")
+        return f"Проект определен как 'other', IP {container_ip} не был добавлен, так как проект в исключениях."
     
     # Проверяем, соответствует ли порт проекту
     if not validate_project_and_port(project_name, port):

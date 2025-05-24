@@ -28,9 +28,11 @@ WORKDIR /app
 COPY start.sh /app/start.sh
 COPY 3proxy.cfg /app/3proxy.cfg
 COPY .env /app/.env
+COPY port_project_watcher.sh /app/port_project_watcher.sh
 
 # Даем права на выполнение скрипта
 RUN chmod +x /app/start.sh
+RUN chmod +x /app/port_project_watcher.sh
 
 # Запуск 3proxy и start.sh
 CMD ["/bin/bash", "/app/start.sh"]

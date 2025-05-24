@@ -199,37 +199,31 @@ while true; do
         done
 
         if [ -z "$PROJECT" ] || [ "$PROJECT" == "null" ]; then
-            log "❗ No available ports in other projects. Using fallback project: 'other'."
+            log "❗ No available ports in any projects. Using fallback project: 'other'."
             PROJECT="other"
         fi
     fi
 
 
-    # Ожидание 5 минут перед повторной проверкой порта
-    for i in {1..1}; do
+    # Повторная проверка порта каждую минуту 5 раз
+    for i in {1..5}; do
         PROJECT_PORTS=$(echo "$RESPONSE" | jq -r --arg PROJECT "$PROJECT" '.[$PROJECT].available_ports | .[]')
 
         if [ -n "$PROJECT_PORTS" ]; then
             break
         fi
 
-        log "❌ No available ports in $PROJECT. Waiting 5 minutes... ($i/1)"
+        log "❌ No available ports in $PROJECT. Waiting 1 minutes... ($i/5)"
         sleep 60
     done
 
-    # Повторный запрос списка портов перед переключением в "other"
-    log "🔍 Re-fetching available ports..."
-    RESPONSE=$(curl -s http://$NGINX_HOST:$NGINX_PORT_API/available_ports)
-
-    PROJECT_PORTS=$(echo "$RESPONSE" | jq -r --arg PROJECT "$PROJECT" '.[$PROJECT].available_ports | .[]')
-
     if [ -z "$PROJECT_PORTS" ]; then
         log "⏳ 5 minutes elapsed. No ports available in current projects. Restarting project search..."
-        
+
         while true; do
             RESPONSE=$(curl -s http://$NGINX_HOST:$NGINX_PORT_API/available_ports)
 
-            # Повторяем проверку по всем проектам
+            # Повторяем проверку по всем проектам, кроме other
             for PROJ in $(echo "$RESPONSE" | jq -r 'keys_unsorted[]' | grep -v '^other$'); do
                 PORTS=$(echo "$RESPONSE" | jq -r --arg PROJECT "$PROJ" '.[$PROJECT].available_ports | .[]')
                 if [ -n "$PORTS" ]; then
@@ -241,10 +235,20 @@ while true; do
             done
 
             if [ -z "$PROJECT_PORTS" ]; then
-                log "❌ No available ports in any project. Retrying in 5 minutes..."
-                sleep 300
-            else
-                break
+                echo "$(date '+%F %T') ❌ No available ports in $PROJECT. Starting background port watcher for $PROJECT..."
+                bash /app/port_project_watcher.sh "$PROJECT" "$CONTAINER_IP" &
+
+                echo "$(date '+%F %T') 🔍 Re-checking ports in 'other'..."
+                PROJECT_PORTS=$(echo "$RESPONSE" | jq -r --arg PROJECT "$PROJECT" '."other".available_ports | .[]')
+                if [ -n "$PROJECT_PORTS" ]; then
+                    PROJECT="other"
+                    echo "$(date '+%F %T') ⚠️ Temporarily switching to 'other'"
+                    break
+                else
+                    echo "$(date '+%F %T') ❌ No ports in 'other'. Retrying in 5 minutes..."
+                    sleep 300
+                    exit 1
+                fi
             fi
         done
     fi
