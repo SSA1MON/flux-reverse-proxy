@@ -227,15 +227,17 @@ while true; do
             if [ -n "$PROJECT_PORTS" ]; then
                 PROJECT="other"
                 log "⚠️ Временно используем проект 'other' для IP $CONTAINER_IP"
-                break
             else
                 log "❌ Нет портов даже в 'other'. Ждём 5 минут и выходим."
                 sleep 300
                 exit 1
             fi
         else
-            # Новый IP: ищем любой другой проект с портами
-            log "🔄 IP новый, ищем другой проект с доступными портами..."
+            # Новый IP: получаем свежие данные по портам
+            RESPONSE=$(curl -s http://$NGINX_HOST:$NGINX_PORT_API/available_ports)
+            log "🔄 IP новый, получаем свежие данные портов..."
+
+            # Пробуем найти непустой проект (кроме other)
             for PROJ in $(echo "$RESPONSE" | jq -r 'keys_unsorted[]' | grep -v '^other$'); do
                 PORTS=$(echo "$RESPONSE" | jq -r --arg PROJECT "$PROJ" '.[$PROJECT].available_ports | .[]')
                 if [ -n "$PORTS" ]; then
@@ -245,7 +247,8 @@ while true; do
                     break
                 fi
             done
-            # Если и тут нет, фолбек на 'other'
+
+            # Если всё ещё нет портов, делаем фолбек на other
             if [ -z "$PROJECT_PORTS" ]; then
                 log "❗ Не найдено портов ни в одном проекте. Фолбек на 'other'."
                 PROJECT="other"
@@ -257,42 +260,27 @@ while true; do
                     exit 1
                 fi
             fi
-            break
         fi
     fi
 
-#    while true; do
-#        log "🔍 Fetching available ports..."
-#        RESPONSE=…
-#
-#        log "🔍 Checking available ports in project: $PROJECT..."
-#        PROJECT_PORTS=…
-#
-#        # Только для нового IP можно переключаться на 'other'
-#        if [ -z "$PROJECT_PORTS" ] && [ "$IP_FOUND" = false ]; then
-#            log "❌ No available ports in $PROJECT. Switching to 'other'."
-#            PROJECT="other"
-#            PROJECT_PORTS=…
-#        fi
-#
-#        for PORT in $PROJECT_PORTS; do
-#            log "🔍 Checking port $PORT for project $PROJECT..."
-#            if ! nc -z $NGINX_HOST $PORT 2>/dev/null; then
-#                log "🚀 Port $PORT is free, using it!"
-#                AVAILABLE_PORT=$PORT
-#                PROJECT_NAME=$PROJECT
-#                add_project_address
-#                break 2
-#            fi
-#        done
-#
-#        if [ -n "$AVAILABLE_PORT" ]; then
-#            break
-#        fi
-#
-#        log "❌ All ports are occupied! Waiting 5 minutes before retrying..."
-#        sleep 300
-#    done
+    # === Выбор конкретного свободного порта ===
+    for PORT in $PROJECT_PORTS; do
+        log "🔍 Checking port $PORT for project $PROJECT..."
+        if ! nc -z $NGINX_HOST $PORT 2>/dev/null; then
+            log "🚀 Port $PORT is free, using it!"
+            AVAILABLE_PORT="$PORT"
+            PROJECT_NAME="$PROJECT"
+            add_project_address
+            break
+        fi
+    done
+
+    # Если порт не найден — выходим с ошибкой
+    if [ -z "$AVAILABLE_PORT" ]; then
+        log "❌ Не удалось найти свободный порт в проекте $PROJECT"
+        exit 1
+    fi
+
 
     log "🔗 Establishing SSH tunnel on port $AVAILABLE_PORT..."
     RESPONSE_SSH=$(sshpass -p "$SSH_PASS" ssh \
