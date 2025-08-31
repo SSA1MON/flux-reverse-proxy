@@ -1,12 +1,22 @@
 import json
 import sys
 import logging
+import os
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-PORTS_FILE = "/usr/share/nginx/html/port_mapping.json"
-IP_MAPPING_FILE = "/usr/share/nginx/html/ip_mapping.json"
+PORTS_FILE = os.getenv("PORTS_FILE", "/usr/share/nginx/html/port_mapping.json")
+if "PORTS_FILE" not in os.environ:
+    logging.error(
+        f"Переменная PORTS_FILE не установлена. Используется значение по умолчанию: {PORTS_FILE}"
+    )
+
+IP_MAPPING_FILE = os.getenv("IP_MAPPING_FILE", "/usr/share/nginx/html/ip_mapping.json")
+if "IP_MAPPING_FILE" not in os.environ:
+    logging.error(
+        f"Переменная IP_MAPPING_FILE не установлена. Используется значение по умолчанию: {IP_MAPPING_FILE}"
+    )
 
 def load_json(file_path):
     """ Загружает JSON-файл """
