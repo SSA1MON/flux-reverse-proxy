@@ -22,8 +22,18 @@ API_KEY = os.getenv("IPHUB_API_KEY", "").strip()
 TWOIP_API_TOKEN = os.getenv("TWOIP_API_TOKEN", "").strip()
 BLACKLIST_FILE = Path("/usr/share/nginx/html/blacklist.json")
 WHITELIST_FILE = Path("/usr/share/nginx/html/whitelist.json")
+=======
+def _get_env_path(var_name: str, default: str) -> Path:
+    value = os.getenv(var_name)
+    if not value:
+        logger.error(f"Environment variable {var_name} is not set. Using default: {default}")
+        value = default
+    return Path(value)
+
+BLACKLIST_FILE = _get_env_path("BLACKLIST_FILE", "/usr/share/nginx/html/blacklist.json")
+WHITELIST_FILE = _get_env_path("WHITELIST_FILE", "/usr/share/nginx/html/whitelist.json")
 API_URL = "https://v2.api.iphub.info/ip/"
-API_USAGE_LOG = Path("/tmp/iphub_api_usage.log")
+API_USAGE_LOG = _get_env_path("API_USAGE_LOG", "/tmp/iphub_api_usage.log")
 API_DAILY_LIMIT = 990
 LOG_FILE_PATH = "/tmp/check_blacklist.log"
 
