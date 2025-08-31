@@ -20,9 +20,7 @@ USE_API = True
 # === Config from .env or defaults ===
 API_KEY = os.getenv("IPHUB_API_KEY", "").strip()
 TWOIP_API_TOKEN = os.getenv("TWOIP_API_TOKEN", "").strip()
-BLACKLIST_FILE = Path("/usr/share/nginx/html/blacklist.json")
-WHITELIST_FILE = Path("/usr/share/nginx/html/whitelist.json")
-=======
+
 def _get_env_path(var_name: str, default: str) -> Path:
     value = os.getenv(var_name)
     if not value:
