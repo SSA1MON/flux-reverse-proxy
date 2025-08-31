@@ -1,0 +1,9 @@
+[Unit]
+Description=Generate ports.json for Flux dashboard
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /generate_ports_json.py
+
+[Install]
+WantedBy=multi-user.target
