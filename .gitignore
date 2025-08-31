@@ -172,6 +172,5 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+**/node_modules/
 
-# Node modules
-nginx/fluxsign/node_modules/
