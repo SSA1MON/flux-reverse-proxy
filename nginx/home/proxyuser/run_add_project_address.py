@@ -5,12 +5,6 @@ import os
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-PORTS_FILE = "/usr/share/nginx/html/port_mapping.json"
-IP_MAPPING_FILE = "/usr/share/nginx/html/ip_mapping.json"
-IP_COUNTRY_FILE = "/usr/share/nginx/html/ip_country.json"
-PORTS_JSON_FILE = "/usr/share/nginx/html/ports.json"
-
-=======
 PORTS_FILE = os.getenv("PORTS_FILE", "/usr/share/nginx/html/port_mapping.json")
 if "PORTS_FILE" not in os.environ:
     logging.error(
@@ -21,6 +15,18 @@ IP_MAPPING_FILE = os.getenv("IP_MAPPING_FILE", "/usr/share/nginx/html/ip_mapping
 if "IP_MAPPING_FILE" not in os.environ:
     logging.error(
         f"Переменная IP_MAPPING_FILE не установлена. Используется значение по умолчанию: {IP_MAPPING_FILE}"
+    )
+
+IP_COUNTRY_FILE = os.getenv("IP_COUNTRY_FILE", "/usr/share/nginx/html/ip_country.json")
+if "IP_COUNTRY_FILE" not in os.environ:
+    logging.error(
+        f"Переменная IP_COUNTRY_FILE не установлена. Используется значение по умолчанию: {IP_COUNTRY_FILE}"
+    )
+
+PORTS_JSON_FILE = os.getenv("PORTS_JSON_FILE", "/usr/share/nginx/html/ports.json")
+if "PORTS_JSON_FILE" not in os.environ:
+    logging.error(
+        f"Переменная PORTS_JSON_FILE не установлена. Используется значение по умолчанию: {PORTS_JSON_FILE}"
     )
 
 def load_json(file_path):

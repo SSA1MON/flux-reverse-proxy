@@ -26,9 +26,7 @@
 ```bash
 pip install -r requirements.txt && pytest
 ```
-=======
 
 ### IP-сервисы
 
 Для определения IP и страны используется последовательность сервисов: сначала [IPHub](https://iphub.info/) с ключом `IPHUB_API_KEY`, затем `ipwho.is`, и при ошибке — `api.2ip.io` с токеном `TWOIP_API_TOKEN`.
-
