@@ -38,6 +38,8 @@ get_external_ip() {
         "https://ifconfig.me/ip"
         "https://icanhazip.com"
         "https://ipinfo.io/ip"
+        "https://ifconfig.co/ip"
+        "https://checkip.amazonaws.com/"
     )
 
     for SERVICE in "${IP_SERVICES[@]}"; do
@@ -265,7 +267,7 @@ while true; do
 
     # === Выбор конкретного свободного порта ===
     for PORT in $PROJECT_PORTS; do
-        log "🔍 Checking port $PORT for project $PROJECT..."
+        log "🔍 Checking port $PORT for project $PROJECT...."
         if ! nc -z $NGINX_HOST $PORT 2>/dev/null; then
             log "🚀 Port $PORT is free, using it!"
             AVAILABLE_PORT="$PORT"
@@ -288,7 +290,7 @@ while true; do
         -o ServerAliveInterval=30 \
         -o ExitOnForwardFailure=yes \
         -o ConnectTimeout=5 \
-        -N -R "$AVAILABLE_PORT":localhost:1080 \
+        -N -R 127.0.0.1:"$AVAILABLE_PORT":127.0.0.1:1080 \
         "$SSH_USER"@"$NGINX_HOST" -p "$NGINX_SSH_PORT" 2>&1)
 
     log "📡 SSH response: $RESPONSE_SSH"
