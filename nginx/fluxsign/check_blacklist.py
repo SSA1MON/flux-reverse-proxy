@@ -19,6 +19,7 @@ USE_API = True
 
 # === Config from .env or defaults ===
 API_KEY = os.getenv("IPHUB_API_KEY", "").strip()
+TWOIP_API_TOKEN = os.getenv("TWOIP_API_TOKEN", "").strip()
 BLACKLIST_FILE = Path("/usr/share/nginx/html/blacklist.json")
 WHITELIST_FILE = Path("/usr/share/nginx/html/whitelist.json")
 API_URL = "https://v2.api.iphub.info/ip/"
@@ -95,6 +96,28 @@ def increment_api_usage():
     with open(API_USAGE_LOG, "a") as f:
         f.write(f"{today}\n")
 
+def fetch_ip_info_fallback(ip: str) -> dict:
+    try:
+        resp = requests.get(f"https://ipwho.is/{ip}", timeout=5)
+        data = resp.json()
+        if data.get("ip") and data.get("country_code"):
+            return {"ip": data["ip"], "countryCode": data["country_code"]}
+    except Exception:
+        pass
+
+    try:
+        url = f"https://api.2ip.io/geo.json?ip={ip}"
+        if TWOIP_API_TOKEN:
+            url += f"&key={TWOIP_API_TOKEN}"
+        resp = requests.get(url, timeout=5)
+        data = resp.json()
+        if data.get("ip") and data.get("country_code"):
+            return {"ip": data["ip"], "countryCode": data["country_code"]}
+    except Exception:
+        pass
+
+    return {}
+
 def check_with_iphub(ip: str) -> dict:
     try:
         headers = {"X-Key": API_KEY}
@@ -121,7 +144,8 @@ def run_legacy_check(ip: str):
 
 # === Full mode (blacklist → whitelist → IPHub) ===
 
-def run_full_check(ip: str):
+def run_full_check(ip: str, country_code: str):
+    logger.info(f"Checking {ip} ({country_code})")
     blacklist = load_json_list(BLACKLIST_FILE, "blacklist")
     if is_ip_in_list(ip, blacklist):
         logger.warning(f"{ip} found in blacklist")
@@ -135,12 +159,20 @@ def run_full_check(ip: str):
         sys.exit(0)
 
     if get_api_usage_today() >= API_DAILY_LIMIT:
-        logger.error(f"API usage limit reached: {API_DAILY_LIMIT}")
+        logger.warning(f"API usage limit reached: {API_DAILY_LIMIT}")
+        info = fetch_ip_info_fallback(ip)
+        if info:
+            logger.info(f"{ip} | GOOD_FALLBACK")
+            sys.exit(0)
         logger.info(f"{ip} | ERROR_API_LIMIT")
         sys.exit(4)
 
     data = check_with_iphub(ip)
     if not data or "block" not in data:
+        info = fetch_ip_info_fallback(ip)
+        if info:
+            logger.info(f"{ip} | GOOD_FALLBACK")
+            sys.exit(0)
         logger.error("IPHub API error or invalid response")
         logger.info(f"{ip} | ERROR_API_RESPONSE")
         sys.exit(5)
@@ -163,17 +195,18 @@ def run_full_check(ip: str):
 # === Entry point ===
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        logger.error("Usage: check_ip.py <ip-address>")
+    if len(sys.argv) < 3:
+        logger.error("Usage: check_ip.py <ip-address> <countryCode>")
         sys.exit(2)
 
     ip_to_check = sys.argv[1]
+    country_code = sys.argv[2]
 
     if USE_API:
         if not API_KEY:
             logger.error("IPHUB_API_KEY is not set in .env")
             logger.info(f"{ip_to_check} | ERROR_NO_API_KEY")
             sys.exit(6)
-        run_full_check(ip_to_check)
+        run_full_check(ip_to_check, country_code)
     else:
         run_legacy_check(ip_to_check)

@@ -55,12 +55,60 @@ get_external_ip() {
     return 1
 }
 
+# Получение сведений об IP с определением страны
+get_ip_info() {
+    local TARGET_IP="$1"
+
+    if [[ -n "$IPHUB_API_KEY" ]]; then
+        local RESP
+        RESP=$(curl -s -H "X-Key: $IPHUB_API_KEY" "https://v2.api.iphub.info/ip/$TARGET_IP")
+        local IP_RES COUNTRY
+        IP_RES=$(echo "$RESP" | jq -r '.ip // empty')
+        COUNTRY=$(echo "$RESP" | jq -r '.countryCode // empty')
+        if [[ -n "$IP_RES" && -n "$COUNTRY" ]]; then
+            echo "$IP_RES|$COUNTRY"
+            return 0
+        fi
+    fi
+
+    local RESP2
+    RESP2=$(curl -s "https://ipwho.is/$TARGET_IP")
+    local IP_RES2 COUNTRY2
+    IP_RES2=$(echo "$RESP2" | jq -r '.ip // empty')
+    COUNTRY2=$(echo "$RESP2" | jq -r '.country_code // empty')
+    if [[ -n "$IP_RES2" && -n "$COUNTRY2" ]]; then
+        echo "$IP_RES2|$COUNTRY2"
+        return 0
+    fi
+
+    local TOKEN_PARAM=""
+    if [[ -n "$TWOIP_API_TOKEN" ]]; then
+        TOKEN_PARAM="&key=$TWOIP_API_TOKEN"
+    fi
+    local RESP3
+    RESP3=$(curl -s "https://api.2ip.io/geo.json?ip=$TARGET_IP$TOKEN_PARAM")
+    local IP_RES3 COUNTRY3
+    IP_RES3=$(echo "$RESP3" | jq -r '.ip // empty')
+    COUNTRY3=$(echo "$RESP3" | jq -r '.country_code // empty')
+    if [[ -n "$IP_RES3" && -n "$COUNTRY3" ]]; then
+        echo "$IP_RES3|$COUNTRY3"
+        return 0
+    fi
+
+    return 1
+}
+
 # Попытка получить внешний IP с периодическим ожиданием
 while true; do
     CONTAINER_IP=$(get_external_ip)
     if [[ -n "$CONTAINER_IP" ]]; then
-        log "🌐 External IP detected: $CONTAINER_IP"
-        break
+        IP_INFO=$(get_ip_info "$CONTAINER_IP")
+        if [[ -n "$IP_INFO" ]]; then
+            CONTAINER_IP="${IP_INFO%%|*}"
+            COUNTRY_CODE="${IP_INFO##*|}"
+            log "🌐 External IP detected: $CONTAINER_IP ($COUNTRY_CODE)"
+            break
+        fi
     fi
 
     log "❌ Failed to determine external IP. Retrying in 15 minutes..."
@@ -71,7 +119,7 @@ done
 check_blacklist() {
     log "🔍 Checking if IP $CONTAINER_IP is valid via remote script..."
 
-    SSH_CMD="python3 $REMOTE_BLACKLIST_SCRIPT '$CONTAINER_IP'"
+    SSH_CMD="python3 $REMOTE_BLACKLIST_SCRIPT '$CONTAINER_IP' '$COUNTRY_CODE'"
     sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no "$SSH_USER@$NGINX_HOST" "$SSH_CMD"
     EXIT_CODE=$?
 
@@ -134,7 +182,7 @@ check_blacklist() {
 add_project_address() {
     log "📡 Adding IP $CONTAINER_IP to project: $PROJECT_NAME with port: $AVAILABLE_PORT"
     ADD_PROJECT_RESPONSE=$(sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no "$SSH_USER@$NGINX_HOST" \
-        "python3 $REMOTE_ADD_PROJECT_SCRIPT '$CONTAINER_IP' '$PROJECT_NAME' '$AVAILABLE_PORT'" 2>&1)
+        "python3 $REMOTE_ADD_PROJECT_SCRIPT '$CONTAINER_IP' '$PROJECT_NAME' '$AVAILABLE_PORT' '$COUNTRY_CODE'" 2>&1)
     log "📡 Response from run_add_project_address.py: $ADD_PROJECT_RESPONSE"
 }
 

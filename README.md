@@ -18,3 +18,7 @@
 ## Ссылки
 1. [reverse-proxy-container/: Контейнер обратного прокси](https://github.com/SSA1MON/flux-reverse-proxy/blob/main/reverse-proxy-container/README.md)
 2. [nginx/: NGINX и API-сервер](https://github.com/SSA1MON/flux-reverse-proxy/blob/main/nginx/README.md)
+
+### IP-сервисы
+
+Для определения IP и страны используется последовательность сервисов: сначала [IPHub](https://iphub.info/) с ключом `IPHUB_API_KEY`, затем `ipwho.is`, и при ошибке — `api.2ip.io` с токеном `TWOIP_API_TOKEN`.
