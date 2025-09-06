@@ -313,41 +313,45 @@ while true; do
         fi
     fi
 
-    # === Выбор конкретного свободного порта ===
+    # === Выбор конкретного свободного порта и попытка подключения ===
+    TUNNEL_ESTABLISHED=false
+    AVAILABLE_PORT=""
     for PORT in $PROJECT_PORTS; do
         log "🔍 Checking port $PORT for project $PROJECT...."
-        if ! nc -z $NGINX_HOST $PORT 2>/dev/null; then
-            log "🚀 Port $PORT is free, using it!"
-            AVAILABLE_PORT="$PORT"
-            PROJECT_NAME="$PROJECT"
-            add_project_address
+        if nc -z $NGINX_HOST $PORT 2>/dev/null; then
+            log "⚠️ Port $PORT is busy, skipping"
+            continue
+        fi
+
+        log "🚀 Port $PORT is free, trying to use it!"
+        AVAILABLE_PORT="$PORT"
+        PROJECT_NAME="$PROJECT"
+        add_project_address
+
+        log "🔗 Establishing SSH tunnel on port $AVAILABLE_PORT..."
+        RESPONSE_SSH=$(sshpass -p "$SSH_PASS" ssh \
+            -o StrictHostKeyChecking=no \
+            -o ServerAliveInterval=30 \
+            -o ExitOnForwardFailure=yes \
+            -o ConnectTimeout=5 \
+            -N -R 127.0.0.1:"$AVAILABLE_PORT":127.0.0.1:1080 \
+            "$SSH_USER"@"$NGINX_HOST" -p "$NGINX_SSH_PORT" 2>&1)
+
+        log "📡 SSH response: $RESPONSE_SSH"
+
+        if echo "$RESPONSE_SSH" | grep -q "successfully"; then
+            log "✅ SSH tunnel established on port $AVAILABLE_PORT!"
+            TUNNEL_ESTABLISHED=true
             break
+        else
+            log "❌ Error setting up SSH tunnel: $RESPONSE_SSH"
+            AVAILABLE_PORT=""
+            sleep 60
         fi
     done
 
-    # Если порт не найден — выходим с ошибкой
-    if [ -z "$AVAILABLE_PORT" ]; then
-        log "❌ Не удалось найти свободный порт в проекте $PROJECT"
-        exit 1
-    fi
-
-
-    log "🔗 Establishing SSH tunnel on port $AVAILABLE_PORT..."
-    RESPONSE_SSH=$(sshpass -p "$SSH_PASS" ssh \
-        -o StrictHostKeyChecking=no \
-        -o ServerAliveInterval=30 \
-        -o ExitOnForwardFailure=yes \
-        -o ConnectTimeout=5 \
-        -N -R 127.0.0.1:"$AVAILABLE_PORT":127.0.0.1:1080 \
-        "$SSH_USER"@"$NGINX_HOST" -p "$NGINX_SSH_PORT" 2>&1)
-
-    log "📡 SSH response: $RESPONSE_SSH"
-
-    if echo "$RESPONSE_SSH" | grep -q "successfully"; then
-        log "✅ SSH tunnel established on port $AVAILABLE_PORT!"
-    else
-        log "❌ Error setting up SSH tunnel: $RESPONSE_SSH"
-        sleep 10
+    if [ "$TUNNEL_ESTABLISHED" = false ]; then
+        log "❌ Не удалось установить SSH-туннель ни на одном порту проекта $PROJECT"
         continue
     fi
 
