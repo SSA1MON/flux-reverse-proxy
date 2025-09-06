@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # Function to load environment variables from .env file
 load_env_variables() {
     if [ -f /app/.env ]; then
@@ -205,21 +204,21 @@ while true; do
         fi
     fi
 
-    # Повторная проверка порта каждую минуту 5 раз (для текущего $PROJECT)
-    for i in {1..5}; do
+    # Повторная проверка порта каждую минуту 2 раза (для текущего $PROJECT)
+    for i in {1..2}; do
         RESPONSE=$(curl -s http://$NGINX_HOST:$NGINX_PORT_API/available_ports)
         PROJECT_PORTS=$(echo "$RESPONSE" | jq -r --arg PROJECT "$PROJECT" '.[$PROJECT].available_ports | .[]')
         if [ -n "$PROJECT_PORTS" ]; then
             log "✅ Свободные порты появились в проекте $PROJECT"
             break
         fi
-        log "❌ Нет портов в $PROJECT. Ждём 1 минуту... ($i/5)"
+        log "❌ Нет портов в $PROJECT. Ждём 1 минуту... ($i/2)"
         sleep 60
     done
 
-    # Если после 5 попыток портов нет, обрабатываем отдельно
+    # Если после 2 попыток портов нет, обрабатываем отдельно
     if [ -z "$PROJECT_PORTS" ]; then
-        log "⏳ 5 минут истекли. Нет свободных портов в проекте $PROJECT."
+        log "⏳ 2 минуты истекли. Нет свободных портов в проекте $PROJECT."
         if [ "$IP_FOUND" = true ]; then
             # Уже привязанный IP: не переключаем проект, только временный 'other'
             log "⚠️ IP $CONTAINER_IP уже привязан к $PROJECT — не переключаемся."
@@ -265,41 +264,45 @@ while true; do
         fi
     fi
 
-    # === Выбор конкретного свободного порта ===
+    # === Выбор конкретного свободного порта и попытка подключения ===
+    TUNNEL_ESTABLISHED=false
+    AVAILABLE_PORT=""
     for PORT in $PROJECT_PORTS; do
         log "🔍 Checking port $PORT for project $PROJECT...."
-        if ! nc -z $NGINX_HOST $PORT 2>/dev/null; then
-            log "🚀 Port $PORT is free, using it!"
-            AVAILABLE_PORT="$PORT"
-            PROJECT_NAME="$PROJECT"
-            add_project_address
+        if nc -z $NGINX_HOST $PORT 2>/dev/null; then
+            log "⚠️ Port $PORT is busy, skipping"
+            continue
+        fi
+
+        log "🚀 Port $PORT is free, trying to use it!"
+        AVAILABLE_PORT="$PORT"
+        PROJECT_NAME="$PROJECT"
+        add_project_address
+
+        log "🔗 Establishing SSH tunnel on port $AVAILABLE_PORT..."
+        RESPONSE_SSH=$(sshpass -p "$SSH_PASS" ssh \
+            -o StrictHostKeyChecking=no \
+            -o ServerAliveInterval=30 \
+            -o ExitOnForwardFailure=yes \
+            -o ConnectTimeout=5 \
+            -N -R 127.0.0.1:"$AVAILABLE_PORT":127.0.0.1:1080 \
+            "$SSH_USER"@"$NGINX_HOST" -p "$NGINX_SSH_PORT" 2>&1)
+
+        log "📡 SSH response: $RESPONSE_SSH"
+
+        if echo "$RESPONSE_SSH" | grep -q "successfully"; then
+            log "✅ SSH tunnel established on port $AVAILABLE_PORT!"
+            TUNNEL_ESTABLISHED=true
             break
+        else
+            log "❌ Error setting up SSH tunnel: $RESPONSE_SSH"
+            AVAILABLE_PORT=""
+            sleep 60
         fi
     done
 
-    # Если порт не найден — выходим с ошибкой
-    if [ -z "$AVAILABLE_PORT" ]; then
-        log "❌ Не удалось найти свободный порт в проекте $PROJECT"
-        exit 1
-    fi
-
-
-    log "🔗 Establishing SSH tunnel on port $AVAILABLE_PORT..."
-    RESPONSE_SSH=$(sshpass -p "$SSH_PASS" ssh \
-        -o StrictHostKeyChecking=no \
-        -o ServerAliveInterval=30 \
-        -o ExitOnForwardFailure=yes \
-        -o ConnectTimeout=5 \
-        -N -R 127.0.0.1:"$AVAILABLE_PORT":127.0.0.1:1080 \
-        "$SSH_USER"@"$NGINX_HOST" -p "$NGINX_SSH_PORT" 2>&1)
-
-    log "📡 SSH response: $RESPONSE_SSH"
-
-    if echo "$RESPONSE_SSH" | grep -q "successfully"; then
-        log "✅ SSH tunnel established on port $AVAILABLE_PORT!"
-    else
-        log "❌ Error setting up SSH tunnel: $RESPONSE_SSH"
-        sleep 10
+    if [ "$TUNNEL_ESTABLISHED" = false ]; then
+        log "❌ Не удалось установить SSH-туннель ни на одном порту проекта $PROJECT"
         continue
     fi
 
